@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                String     @id      @default(uuid())
+  username          String
+  password          String
+  projects          Project[]
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+}
+
+model Project {
+  id                String      @id       @default(uuid())
+  title             String
+  initialPrompt     String
+  
+  userId            String
+  user              User                    @relation(references: [id], fields: [userId])
+  
+  conversation      Conversation[]
+  
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+}
+
+model Conversation {
+  id                String        @id         @default(uuid())
+
+  type              ConversationType
+  from              MessageFrom
+  contents          String
+  toolCall          ToolCall?
+  
+  projectId         String
+  project           Project       @relation(references: [id], fields: [projectId])
+
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+}
+
+
+enum ToolCall {
+  READ_FILE
+  WRITE_FILE
+  DELETE_FILE
+}
+
+enum ConversationType {
+  TOOL_CALL
+  TEXT_MESSAGE
+}
+
+enum MessageFrom {
+  USER
+  ASSISTANT
+}

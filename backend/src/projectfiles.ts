@@ -3,6 +3,9 @@ import { writeFileSync } from "fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ProjectFile } from "./types";
+import { exec } from "child_process";
+import { promisify } from "util";
+import { spawn } from "node:child_process";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
@@ -76,3 +79,31 @@ export function writeFileFn(
     return false;
   }
 }
+
+export async function bash({ command }: { command: string }) {
+  return new Promise<{ stdout: string; stderr: string }>((resolve) => {
+    const child = spawn("wsl", ["bash", "-lc", command]);
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (d) => (stdout += d));
+    child.stderr.on("data", (d) => (stderr += d));
+
+    child.on("close", () => resolve({ stdout, stderr }));
+  });
+}
+
+// console.log(await bash({
+//   command: `
+// cd /mnt/e/S-30-3.0/lovable-v1/template &&
+// find . -maxdepth 2 -type f |
+// sed 's#^./##' |
+// sort |
+// head -100 &&
+// echo '--- package.json ---' &&
+// cat package.json &&
+// echo '--- README.md ---' &&
+// head -120 README.md
+// `
+// }))

@@ -106,6 +106,8 @@ export async function agentLoop(res: Response, input: string, projectId: string)
       for (const call of toolCalls) {
         const tool = TOOL_IMPLEMENTATIONS[call.name];
   
+        console.log("call", call)
+        
         try {
           const output = await tool(JSON.parse(call.arguments));
     

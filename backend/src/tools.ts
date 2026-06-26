@@ -1,126 +1,168 @@
-import { listProjectFiles, projectRoot, toProjectPath, walkProject, writeFileFn } from "./projectfiles";
+import { bash, listProjectFiles, projectRoot, toProjectPath, walkProject, writeFileFn } from "./projectfiles";
 import type { FunctionTool } from "./types";
 
 export const TOOLS: FunctionTool[] = [
   {
-    name: "listProjectFiles",
+    name: "bash",
     description: `
-      Get all project files along with their content.
+      Execute a bash command in the project's WSL environment.
+
+      Use this tool when you need to:
+      - Inspect the project structure (ls, find, tree)
+      - Read files (cat, head, tail)
+      - Search code (grep, rg)
+      - Check the current directory (pwd)
+      - Run build, test, or lint commands
+      - Install dependencies
+      - Execute scripts or any other shell command
+
+      Input:
+      - command: The bash command to execute.
 
       Returns:
-      [
-        {
-          path: "src/index.ts",
-          content: "..."
-        }
-      ]
-    `,
-    parameters: {
-      type: "object",
-      properties: {},
-      additionalProperties: false,
-    },
-    strict: true,
-    type: "function",
-  },
+      {
+        stdout: "Command standard output",
+        stderr: "Command error output"
+      }
 
-  {
-    name: "walkProject",
-    description: `
-      Get all files recursively from the given directory.
-
-      Example output:
-      [
-        "src/index.ts",
-        "src/components/Button.tsx"
-      ]
+      If the command fails unexpectedly, the tool may return null.
     `,
     parameters: {
       type: "object",
       properties: {
-        directory: {
+        command: {
           type: "string",
-          description: "Directory to walk",
+          description: "The bash command to execute inside WSL.",
         },
       },
-      required: ["directory"],
+      required: ["command"],
       additionalProperties: false,
     },
     strict: true,
     type: "function",
   },
 
-  {
-    name: "toProjectPath",
-    description: `
-      Convert an absolute path into a project-relative path.
+  // {
+  //   name: "listProjectFiles",
+  //   description: `
+  //     Get all project files along with their content.
 
-      Example:
-      "C:\\project\\src\\index.ts"
-      =>
-      "src/index.ts"
-    `,
-    parameters: {
-      type: "object",
-      properties: {
-        filePath: {
-          type: "string",
-          description: "Absolute file path",
-        },
-      },
-      required: ["filePath"],
-      additionalProperties: false,
-    },
-    strict: true,
-    type: "function",
-  },
+  //     Returns:
+  //     [
+  //       {
+  //         path: "src/index.ts",
+  //         content: "..."
+  //       }
+  //     ]
+  //   `,
+  //   parameters: {
+  //     type: "object",
+  //     properties: {},
+  //     additionalProperties: false,
+  //   },
+  //   strict: true,
+  //   type: "function",
+  // },
 
-  {
-    name: "writeFileFn",
-    description: `
-      Create or update a file.
+  // {
+  //   name: "walkProject",
+  //   description: `
+  //     Get all files recursively from the given directory.
 
-      Before calling:
-      1. Use walkProject to discover files.
-      2. Use listProjectFiles to inspect file contents.
-      3. Use writeFileFn to create/update files.
+  //     Example output:
+  //     [
+  //       "src/index.ts",
+  //       "src/components/Button.tsx"
+  //     ]
+  //   `,
+  //   parameters: {
+  //     type: "object",
+  //     properties: {
+  //       directory: {
+  //         type: "string",
+  //         description: "Directory to walk",
+  //       },
+  //     },
+  //     required: ["directory"],
+  //     additionalProperties: false,
+  //   },
+  //   strict: true,
+  //   type: "function",
+  // },
 
-      Content must always be passed as a string.
-    `,
-    parameters: {
-      type: "object",
-      properties: {
-        path: {
-          type: "string",
-          description: "Relative file path",
-        },
-        content: {
-          type: "string",
-          description: "File content as a string",
-        },
-      },
-      required: ["path", "content"],
-      additionalProperties: false,
-    },
-    strict: true,
-    type: "function",
-  },
+  // {
+  //   name: "toProjectPath",
+  //   description: `
+  //     Convert an absolute path into a project-relative path.
+
+  //     Example:
+  //     "C:\\project\\src\\index.ts"
+  //     =>
+  //     "src/index.ts"
+  //   `,
+  //   parameters: {
+  //     type: "object",
+  //     properties: {
+  //       filePath: {
+  //         type: "string",
+  //         description: "Absolute file path",
+  //       },
+  //     },
+  //     required: ["filePath"],
+  //     additionalProperties: false,
+  //   },
+  //   strict: true,
+  //   type: "function",
+  // },
+
+  // {
+  //   name: "writeFileFn",
+  //   description: `
+  //     Create or update a file.
+
+  //     Before calling:
+  //     1. Use walkProject to discover files.
+  //     2. Use listProjectFiles to inspect file contents.
+  //     3. Use writeFileFn to create/update files.
+
+  //     Content must always be passed as a string.
+  //   `,
+  //   parameters: {
+  //     type: "object",
+  //     properties: {
+  //       path: {
+  //         type: "string",
+  //         description: "Relative file path",
+  //       },
+  //       content: {
+  //         type: "string",
+  //         description: "File content as a string",
+  //       },
+  //     },
+  //     required: ["path", "content"],
+  //     additionalProperties: false,
+  //   },
+  //   strict: true,
+  //   type: "function",
+  // },
 ];
 
 export const TOOL_IMPLEMENTATIONS = {
-  listProjectFiles,
+  bash,
+  
+  // listProjectFiles,
 
-  walkProject: ({ directory }: { directory: string }) =>
-    walkProject(directory),
+  // walkProject: ({ directory }: { directory: string }) =>
+  //   walkProject(directory),
 
-  toProjectPath: ({ filePath }: { filePath: string }) =>
-    toProjectPath(filePath),
+  // toProjectPath: ({ filePath }: { filePath: string }) =>
+  //   toProjectPath(filePath),
 
-  writeFileFn: ({
-    path,
-    content,
-  }: {
-    path: string;
-    content: string;
-  }) => writeFileFn(path, content),
+  // writeFileFn: ({
+  //   path,
+  //   content,
+  // }: {
+  //   path: string;
+  //   content: string;
+  // }) => writeFileFn(path, content),
 };

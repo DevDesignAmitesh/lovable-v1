@@ -21,7 +21,8 @@ model Project {
   id                String      @id         @default(uuid())
   title             String
   initialPrompt     String
-  
+  responseId        String?
+
   userId            String
   user              User                    @relation(references: [id], fields: [userId])
   

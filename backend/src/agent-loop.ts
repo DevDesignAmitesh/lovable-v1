@@ -41,10 +41,10 @@ export async function agentLoop(res: Response, input: string, projectId: string)
     while (steps < MAX_STEPS) {
       console.log(...messageManager.get());
 
-      let str = "";
+      let str: string | null = null;
       
       const stream = await openai.responses.create({
-        model: "gpt-5.5",
+        model: "gpt-5.4-mini",
         input: [
           {
             role: "system",
@@ -54,6 +54,7 @@ export async function agentLoop(res: Response, input: string, projectId: string)
         ],
         tools: TOOLS,
         stream: true,
+        temperature: 0
       });
   
       
@@ -61,51 +62,45 @@ export async function agentLoop(res: Response, input: string, projectId: string)
       let tool_getting_used: string | null = null;
         
       loop2:
-        for await (const event of stream) {  
-          if (event.type === "response.output_item.added") {
-            tool_getting_used = event.item.name;  
-          } else if (event.type === "response.function_call_arguments.delta" && tool_getting_used !== null) {
-            console.log("tool_getting_used", tool_getting_used);
-            res.write(
-              `data: ${JSON.stringify({
-                type: "tool_getting_used",
-                delta: event.delta,
-                tool_name: tool_getting_used
-              })}\n\n`
-            );
-          } else if (event.type === "response.output_text.delta") {
-            res.write(
-              `data: ${JSON.stringify({
-                type: "text",
-                delta: event.delta,
-              })}\n\n`
-            );
-            str += `${event.delta}`;
-          } else if (event.type === "response.output_item.done") {
-            if (event.item.type === "function_call") {
-              messageManager.add({
-                content: `
-                <TOOL_TO_USE>
-                  ${JSON.stringify(event.item)}
-                <TOOL_TO_USE>
-                `,
-                role: "assistant"
-              });
-              // await prisma.conversation.create({
-              //   data: {
-              //     // TODO: get the types of event.item
-              //     contents: JSON.stringify(event.item),
-              //     from: "ASSISTANT",
-              //     type: "TOOL_CALL",
-              //     projectId,
-              //   }
-              // });
-              toolCalls.push(event.item);
-            }
+      for await (const event of stream) {
+        if (event.type === "response.output_item.added") {
+          tool_getting_used = event.item.name;  
+        } else if (event.type === "response.function_call_arguments.delta" && tool_getting_used !== null) {
+          console.log("tool_getting_used", tool_getting_used);
+        } else if (event.type === "response.output_text.delta") {
+          str += event.delta;
+
+          res.write(
+            `data: ${JSON.stringify({
+              type: "text",
+              delta: event.delta,
+            })}\n\n`
+          );
+        } else if (event.type === "response.output_item.done") {
+          if (event.item.type === "function_call") {
+            messageManager.add({
+              content: `
+              <TOOL_TO_USE>
+                ${JSON.stringify(event.item)}
+              <TOOL_TO_USE>
+              `,
+              role: "assistant"
+            });
+            // await prisma.conversation.create({
+            //   data: {
+            //     // TODO: get the types of event.item
+            //     contents: JSON.stringify(event.item),
+            //     from: "ASSISTANT",
+            //     type: "TOOL_CALL",
+            //     projectId,
+            //   }
+            // });
+            toolCalls.push(event.item);
           }
         }
+      }
 
-      if (str !== "") {
+      if (typeof str === "string") {
         messageManager.add({
           content: `
           <ASSISTANT_RESPONSE>
@@ -124,43 +119,42 @@ export async function agentLoop(res: Response, input: string, projectId: string)
         // });
       }
       
-      if (toolCalls.length === 0) {
+      if (toolCalls.length === 0 && tool_getting_used !== "broadcast_tool_to_user_tool") {
         break loop1;
       }
 
       tool_getting_used = null;
   
       loop3: 
-        for (const call of toolCalls) {
-          try {
-            const tool = TOOL_IMPLEMENTATIONS[call.name];
-            
-            console.log("calling tool name and args");
-            console.log(call.name);
-            console.log(call.arguments);
+      for (const call of toolCalls) {
+        try {
+          const tool = TOOL_IMPLEMENTATIONS[call.name];
           
-            const output = await tool(JSON.parse(call.arguments ?? "{}"));
+          console.log("calling tool name and args");
+          console.log(call.name);
+          console.log(call.arguments);
+        
+          const output = await tool(JSON.parse(call.arguments ?? "{}"));
 
-            messageManager.add({
-              content: `
-              <TOOL_RESPONSE>
-                ${JSON.stringify(output)}
-              <TOOL_RESPONSE>
-              `,
-              role: "user"
-            });
-            
-            if (
-              call.name === "broadcast_questions_to_user_tool" || 
-              call.name === "broadcast_plan_to_user_tool" || 
-              call.name === "broadcast_summary_to_user_tool" 
-            ) {
-              break loop1;
-            }
-          } catch (e) {
-            console.log("error", e);
+          messageManager.add({
+            content: `
+            <TOOL_RESPONSE>
+              ${JSON.stringify(output)}
+            <TOOL_RESPONSE>
+            `,
+            role: "user"
+          });
+          
+          if (
+            call.name === "broadcast_questions_to_user_tool" || 
+            call.name === "broadcast_plan_to_user_tool"
+          ) {
+            break loop1;
           }
+        } catch (e) {
+          console.log("error", e);
         }
+      }
 
       steps++;
     }    

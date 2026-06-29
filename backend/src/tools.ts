@@ -1,4 +1,4 @@
-import { bash } from "./projectfiles";
+import { bash, projectRoot } from "./projectfiles";
 import type { FunctionTool } from "./types";
 
 export const TOOLS: FunctionTool[] = [
@@ -7,6 +7,8 @@ export const TOOLS: FunctionTool[] = [
     description: `
       Execute a bash command in the project's WSL environment.
 
+      Execute all this command inside this workspace: E:\\S-30-3.0\\lovable-v1\\template
+      
       Use this tool when you need to:
       - Inspect the project structure (ls, find, tree)
       - Read files (cat, head, tail)

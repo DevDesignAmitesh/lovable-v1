@@ -94,19 +94,3 @@ export async function bash({ command }: { command: string }) {
     child.on("close", () => resolve({ stdout, stderr }));
   });
 }
-
-// console.log(await bash({
-//   command: `
-// cd /mnt/e/S-30-3.0/lovable-v1/template &&
-// find . -maxdepth 2 -type f |
-// sed 's#^./##' |
-// sort |
-// head -100 &&
-// echo '--- package.json ---' &&
-// cat package.json &&
-// echo '--- README.md ---' &&
-// head -120 README.md
-// `
-// }))
-
-console.log(projectRoot)

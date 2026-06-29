@@ -6,7 +6,6 @@ export type ProjectFile = {
 export type Message = {
   role: "user" | "assistant";
   content: string;
-  createdAt: string;
 };
 
 export type ProjectSnapshot = {

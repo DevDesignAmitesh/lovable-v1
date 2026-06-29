@@ -1,8 +1,9 @@
-import { type Response } from "express";
+import e, { type Response } from "express";
 import { OpenAI } from "openai";
 import { SYSTEM_INSTRUCTION } from "./prompt";
 import { TOOL_IMPLEMENTATIONS, TOOLS } from "./tools";
 import { prisma } from "./db";
+import { messageManager } from "./message.manager";
 
 const MAX_STEPS = 10;
 const openai = new OpenAI();
@@ -15,119 +16,161 @@ export async function agentLoop(res: Response, input: string, projectId: string)
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  // res.write(`Connected to server\n\n`);
-
-  let previousResponseId: string | undefined;
-  let toolOutputs = [];
-
-  await prisma.conversation.create({
-    data: {
-      contents: input,
-      from: "USER",
-      type: "TEXT_MESSAGE",
-      projectId
-    }
+  messageManager.add({
+    content: `
+    <USER_QUERY>
+      ${input}
+    <USER_QUERY>
+    `,
+    role: "user"
   });
+  
+  // await prisma.conversation.create({
+  //   data: {
+  //     contents: input,
+  //     from: "USER",
+  //     type: "TEXT_MESSAGE",
+  //     projectId
+  //   }
+  // });
 
+  
   try {
+    
+    loop1: 
     while (steps < MAX_STEPS) {
+      console.log(...messageManager.get());
+
       let str = "";
       
       const stream = await openai.responses.create({
         model: "gpt-5.5",
-        previous_response_id: previousResponseId,
-        input:
-          previousResponseId === undefined
-            ? [
-                {
-                  role: "system",
-                  content: SYSTEM_INSTRUCTION,
-                },
-                {
-                  role: "user",
-                  content: input,
-                },
-              ]
-            : toolOutputs,
+        input: [
+          {
+            role: "system",
+            content: SYSTEM_INSTRUCTION,
+          },
+          ...messageManager.get()
+        ],
         tools: TOOLS,
         stream: true,
       });
   
       
-      let toolCalls = [];
-  
-      for await (const event of stream) {        
-        if (event.type === "response.created") {
-          previousResponseId = event.response.id;
-        } else if (event.type === "response.output_text.delta") {
-          
-          res.write(
-            `data: ${JSON.stringify({
-              type: "text",
-              delta: event.delta,
-            })}\n\n`
-          );
-          str += `${event.delta}`;
-        } else if (event.type === "response.output_item.done") {
-          if (event.item.type === "function_call") {
-            await prisma.conversation.create({
-              data: {
-                // TODO: get the types of event.item
-                contents: JSON.stringify(event.item),
-                from: "ASSISTANT",
-                type: "TOOL_CALL",
-                projectId,
-              }
-            });
-            toolCalls.push(event.item);
+      let toolCalls = [];    
+      let tool_getting_used: string | null = null;
+        
+      loop2:
+        for await (const event of stream) {  
+          if (event.type === "response.output_item.added") {
+            tool_getting_used = event.item.name;  
+          } else if (event.type === "response.function_call_arguments.delta" && tool_getting_used !== null) {
+            console.log("tool_getting_used", tool_getting_used);
+            res.write(
+              `data: ${JSON.stringify({
+                type: "tool_getting_used",
+                delta: event.delta,
+                tool_name: tool_getting_used
+              })}\n\n`
+            );
+          } else if (event.type === "response.output_text.delta") {
+            res.write(
+              `data: ${JSON.stringify({
+                type: "text",
+                delta: event.delta,
+              })}\n\n`
+            );
+            str += `${event.delta}`;
+          } else if (event.type === "response.output_item.done") {
+            if (event.item.type === "function_call") {
+              messageManager.add({
+                content: `
+                <TOOL_TO_USE>
+                  ${JSON.stringify(event.item)}
+                <TOOL_TO_USE>
+                `,
+                role: "assistant"
+              });
+              // await prisma.conversation.create({
+              //   data: {
+              //     // TODO: get the types of event.item
+              //     contents: JSON.stringify(event.item),
+              //     from: "ASSISTANT",
+              //     type: "TOOL_CALL",
+              //     projectId,
+              //   }
+              // });
+              toolCalls.push(event.item);
+            }
           }
         }
-      }
-  
-      
-      if (toolCalls.length === 0) {
-        break;
-      }
-  
-      toolOutputs = [];
-
 
       if (str !== "") {
-        await prisma.conversation.create({
-          data: {
-            contents: str,
-            from: "ASSISTANT",
-            type: "TEXT_MESSAGE",
-            projectId
-          }
+        messageManager.add({
+          content: `
+          <ASSISTANT_RESPONSE>
+            ${str}
+          <ASSISTANT_RESPONSE>
+          `,
+          role: "assistant"
         });
+        // await prisma.conversation.create({
+        //   data: {
+        //     contents: str,
+        //     from: "ASSISTANT",
+        //     type: "TEXT_MESSAGE",
+        //     projectId
+        //   }
+        // });
       }
+      
+      if (toolCalls.length === 0) {
+        break loop1;
+      }
+
+      tool_getting_used = null;
   
-      for (const call of toolCalls) {
-        const tool = TOOL_IMPLEMENTATIONS[call.name];
-  
-        console.log("call", call)
-        
-        try {
-          const output = await tool(JSON.parse(call.arguments));
-    
+      loop3: 
+        for (const call of toolCalls) {
+          try {
+            const tool = TOOL_IMPLEMENTATIONS[call.name];
+            
+            console.log("calling tool name and args");
+            console.log(call.name);
+            console.log(call.arguments);
           
-          toolOutputs.push({
-            type: "function_call_output",
-            call_id: call.call_id,
-            output: JSON.stringify(output),
-          });
-        } catch (e) {
+            const output = await tool(JSON.parse(call.arguments ?? "{}"));
+
+            messageManager.add({
+              content: `
+              <TOOL_RESPONSE>
+                ${JSON.stringify(output)}
+              <TOOL_RESPONSE>
+              `,
+              role: "user"
+            });
+            
+            if (
+              call.name === "broadcast_questions_to_user_tool" || 
+              call.name === "broadcast_plan_to_user_tool" || 
+              call.name === "broadcast_summary_to_user_tool" 
+            ) {
+              break loop1;
+            }
+          } catch (e) {
+            console.log("error", e);
+          }
         }
-      }
-  
+
       steps++;
-    }
-    
+    }    
   
+    console.log("loop ends");
+
     steps = 0;
     res.end();
   } catch (e) {
+    console.log("error", e)
     res.end();
   }
 };

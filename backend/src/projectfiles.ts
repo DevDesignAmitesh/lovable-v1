@@ -82,6 +82,7 @@ export function writeFileFn(
 
 export async function bash({ command }: { command: string }) {
   return new Promise<{ stdout: string; stderr: string }>((resolve) => {
+    process.chdir(projectRoot);
     const child = spawn("wsl", ["bash", "-lc", command]);
 
     let stdout = "";
@@ -107,3 +108,5 @@ export async function bash({ command }: { command: string }) {
 // head -120 README.md
 // `
 // }))
+
+console.log(projectRoot)

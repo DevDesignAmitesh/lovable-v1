@@ -1,4 +1,4 @@
-import e, { type Response } from "express";
+import { type Response } from "express";
 import { OpenAI } from "openai";
 import { SYSTEM_INSTRUCTION } from "./prompt";
 import { TOOL_IMPLEMENTATIONS, TOOLS } from "./tools";
@@ -36,11 +36,8 @@ export async function agentLoop(res: Response, input: string, projectId: string)
 
   
   try {
-    
     loop1: 
     while (steps < MAX_STEPS) {
-      console.log(...messageManager.get());
-
       let str: string | null = null;
       
       const stream = await openai.responses.create({
@@ -66,7 +63,6 @@ export async function agentLoop(res: Response, input: string, projectId: string)
         if (event.type === "response.output_item.added") {
           tool_getting_used = event.item.name;  
         } else if (event.type === "response.function_call_arguments.delta" && tool_getting_used !== null) {
-          console.log("tool_getting_used", tool_getting_used);
         } else if (event.type === "response.output_text.delta") {
           str += event.delta;
 
@@ -129,11 +125,7 @@ export async function agentLoop(res: Response, input: string, projectId: string)
       for (const call of toolCalls) {
         try {
           const tool = TOOL_IMPLEMENTATIONS[call.name];
-          
-          console.log("calling tool name and args");
-          console.log(call.name);
-          console.log(call.arguments);
-        
+                  
           const output = await tool(JSON.parse(call.arguments ?? "{}"));
 
           messageManager.add({
@@ -159,8 +151,6 @@ export async function agentLoop(res: Response, input: string, projectId: string)
       steps++;
     }    
   
-    console.log("loop ends");
-
     steps = 0;
     res.end();
   } catch (e) {

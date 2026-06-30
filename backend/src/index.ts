@@ -84,8 +84,6 @@ app.get("/project/conversation/:projectId", auth, async (req, res) => {
     return;
   }
   
-  console.log("running")
-  
   agentLoop(res, query, projectId);
 });
 
